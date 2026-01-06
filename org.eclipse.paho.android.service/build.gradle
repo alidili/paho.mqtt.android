@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply plugin: 'maven-publish'
 
 android {
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -8,6 +9,7 @@ android {
         minSdkVersion 16
         targetSdkVersion 34
     }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -21,6 +23,19 @@ android {
 
     lintOptions {
         abortOnError false
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'com.github.alidili'
+                artifactId = 'mqtt'
+                version = '1.0.0'
+            }
+        }
     }
 }
 

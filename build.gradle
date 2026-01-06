@@ -5,6 +5,7 @@ buildscript {
         jcenter()
         mavenCentral()
         google()
+        maven { url 'https://jitpack.io' }
     }
     dependencies {
 	    classpath 'com.android.tools.build:gradle:7.4.0'
@@ -14,57 +15,18 @@ buildscript {
 }
 
 ext{
-
     compileSdkVersion = 34
     buildToolsVersion = '34.0.0'
 
-
-    group = 'org.eclipse.paho'
-
-    sampleArchivesBaseName = 'org.eclipse.paho.android.sample'
-    sampleVersion = '1.1.1'
-
-    serviceArchivesBaseName = 'org.eclipse.paho.android.service'
-    serviceVersion = '1.1.1'
-
     clientVersion = '1.2.5'
-
-    mavenUrl = "https://repo.eclipse.org/content/repositories/paho-releases/"
-
     supportLibVersion = '1.0.0'
-
 }
-
-def getSdkDirFromLocalProperties() {
-    def rootDir = project.rootDir
-    def localProperties = new File(rootDir, "local.properties")
-    Properties properties = new Properties()
-    localProperties.withInputStream { instr ->
-        properties.load(instr)
-    }
-    properties.getProperty('sdk.dir')
-}
-
-
-def androidHome = System.env['ANDROID_HOME']
-
-def androidHomeIsDefined = androidHome?.trim()
-
-def sdkDir = androidHomeIsDefined ? androidHome : getSdkDirFromLocalProperties()
-
-println "SDK dir: $sdkDir"
-
 
 allprojects {
-
     repositories {
         jcenter()
-        maven {
-            url "file://$sdkDir/extras/android/m2repository/"
-        }
+        mavenCentral()
         google()
+        maven { url 'https://jitpack.io' }
     }
-
-    version = rootProject.ext.serviceVersion
-    group = rootProject.ext.group
 }
