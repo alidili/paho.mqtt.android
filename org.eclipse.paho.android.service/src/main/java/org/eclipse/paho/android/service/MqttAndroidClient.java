@@ -55,8 +55,9 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.v4.content.LocalBroadcastManager;
 import android.util.SparseArray;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 /**
  * Enables an android application to communicate with an MQTT server using non-blocking methods.
@@ -446,9 +447,9 @@ public class MqttAndroidClient extends BroadcastReceiver implements
 
 	private void registerReceiver(BroadcastReceiver receiver) {
 		IntentFilter filter = new IntentFilter();
-				filter.addAction(MqttServiceConstants.CALLBACK_TO_ACTIVITY);
-				LocalBroadcastManager.getInstance(myContext).registerReceiver(receiver, filter);
-				receiverRegistered = true;
+		filter.addAction(MqttServiceConstants.CALLBACK_TO_ACTIVITY);
+		LocalBroadcastManager.getInstance(myContext).registerReceiver(receiver, filter);
+		receiverRegistered = true;
 	}
 
 	/**
@@ -1262,6 +1263,11 @@ public class MqttAndroidClient extends BroadcastReceiver implements
 		return token;
 	}
 
+	@Override
+	public boolean removeMessage(IMqttDeliveryToken token) throws MqttException {
+		return false;
+	}
+
 	/**
 	 * Returns the delivery tokens for any outstanding publish operations.
 	 * <p>
@@ -1425,6 +1431,11 @@ public class MqttAndroidClient extends BroadcastReceiver implements
 	
 	public void setManualAcks(boolean manualAcks) {
 		throw new UnsupportedOperationException();	
+	}
+
+	@Override
+	public void reconnect() throws MqttException {
+
 	}
 
 	/**
@@ -1669,7 +1680,12 @@ public class MqttAndroidClient extends BroadcastReceiver implements
 	public void deleteBufferedMessage(int bufferIndex){
 		mqttService.deleteBufferedMessage(clientHandle, bufferIndex);
 	}
-	
+
+	@Override
+	public int getInFlightMessageCount() {
+		return 0;
+	}
+
 	/**
 	 * Get the SSLSocketFactory using SSL key store and password
 	 * <p>
