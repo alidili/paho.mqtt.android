@@ -771,8 +771,12 @@ public class MqttService extends Service implements MqttTraceHandler {
   private void registerBroadcastReceivers() {
 		if (networkConnectionMonitor == null) {
 			networkConnectionMonitor = new NetworkConnectionIntentReceiver();
-			registerReceiver(networkConnectionMonitor, new IntentFilter(
-					ConnectivityManager.CONNECTIVITY_ACTION));
+            IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(networkConnectionMonitor, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(networkConnectionMonitor, filter);
+            }
 		}
 
 		if (Build.VERSION.SDK_INT < 14 /**Build.VERSION_CODES.ICE_CREAM_SANDWICH**/) {

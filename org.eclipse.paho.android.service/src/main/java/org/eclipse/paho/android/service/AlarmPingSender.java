@@ -73,8 +73,12 @@ class AlarmPingSender implements MqttPingSender {
 		Log.d(TAG, "Register alarmreceiver to MqttService"+ action);
 		service.registerReceiver(alarmReceiver, new IntentFilter(action));
 
-		pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(
-				action), PendingIntent.FLAG_UPDATE_CURRENT);
+		int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+		// Android 6.0+ 引入了 IMMUTABLE，但在 Android 12+ 强制要求
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+			flags |= PendingIntent.FLAG_IMMUTABLE;
+		}
+		pendingIntent = PendingIntent.getBroadcast(service, 0, new Intent(action), flags);
 
 		schedule(comms.getKeepAlive());
 		hasStarted = true;

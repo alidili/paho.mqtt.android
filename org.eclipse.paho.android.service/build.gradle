@@ -27,5 +27,4 @@ android {
 dependencies {
     implementation "org.eclipse.paho:org.eclipse.paho.client.mqttv3:${rootProject.ext.clientVersion}"
     implementation "androidx.legacy:legacy-support-v4:${rootProject.ext.supportLibVersion}"
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
 }
