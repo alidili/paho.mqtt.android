@@ -17,6 +17,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- MQTT服务 -->
+        <service
+            android:name=".MQTTService"
+            android:enabled="true"
+            android:exported="false" />
     </application>
 
 </manifest>

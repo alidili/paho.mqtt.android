@@ -36,6 +36,10 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.17.0'
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'com.google.android.material:material:1.13.0'
-    implementation 'androidx.activity:activity:1.12.2'
+    implementation 'androidx.activity:activity-ktx:1.12.2'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+
+    // MQTT客户端依赖
+    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+    implementation 'com.github.alidili:paho.mqtt.android:1.0.0'
 }
