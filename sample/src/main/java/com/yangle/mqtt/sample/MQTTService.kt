@@ -22,25 +22,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Created by YangLe on 2026/1/9.
  * Website：http://www.yangle.tech
  */
-class MQTTService : Service(), MqttCallback {
+class MQTTService : Service() {
 
     companion object {
         private const val TAG = "MQTTService"
     }
 
     private var mqttClient: MqttAndroidClient? = null
-    private var connectOptions: MqttConnectOptions? = null
-    val isConnected = AtomicBoolean(false)
-    private val binder = LocalBinder()
-
-    interface MQTTCallback {
-        fun onConnectionSuccess()
-        fun onConnectionFailure(error: String?)
-        fun onMessageReceived(topic: String?, message: String?)
-        fun onMessageDelivered(topic: String?)
-    }
-
-    private var callback: MQTTCallback? = null
+    private var mConnectOptions: MqttConnectOptions? = null
+    private val mIsConnected = AtomicBoolean(false)
+    private val mBinder = LocalBinder()
+    private var mCallback: MQTTCallback? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): MQTTService = this@MQTTService
@@ -48,56 +40,85 @@ class MQTTService : Service(), MqttCallback {
 
     override fun onCreate() {
         super.onCreate()
-        initializeMQTT()
+        initMQTT()
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder = mBinder
 
-    private fun initializeMQTT() {
+    /**
+     * 初始化MQTT
+     */
+    private fun initMQTT() {
         mqttClient = MqttAndroidClient(
             this, MQTTConfig.BROKER_URL, MQTTConfig.CLIENT_ID, MemoryPersistence()
         )
-        mqttClient?.setCallback(this)
 
-        connectOptions = MqttConnectOptions().apply {
+        mqttClient?.setCallback(object : MqttCallback {
+            override fun connectionLost(cause: Throwable?) {
+                mIsConnected.set(false)
+                Log.e(TAG, "MQTT断开连接: ${cause?.message}")
+                mCallback?.onConnectionFailure("断开连接: ${cause?.message}")
+            }
+
+            override fun messageArrived(topic: String?, message: MqttMessage?) {
+                val payload = String(message?.payload ?: ByteArray(0))
+                Log.d(TAG, "收到消息 - 主题: $topic, 内容: $payload")
+                mCallback?.onMessageReceived(topic ?: "", payload)
+            }
+
+            override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                val topics = token?.topics
+                if (topics != null && topics.isNotEmpty()) {
+                    val topic = topics[0]
+                    Log.d(TAG, "消息投递完成 - 主题: $topic")
+                    mCallback?.onMessageDelivered(topic)
+                }
+            }
+        })
+
+        mConnectOptions = MqttConnectOptions().apply {
             isCleanSession = MQTTConfig.CLEAN_SESSION
             connectionTimeout = MQTTConfig.CONNECTION_TIMEOUT
             keepAliveInterval = MQTTConfig.KEEP_ALIVE_INTERVAL
             userName = MQTTConfig.USERNAME
             password = MQTTConfig.PASSWORD.toCharArray()
         }
-
-        Log.d(TAG, "MQTT客户端初始化完成")
     }
 
+    /**
+     * MQTT连接
+     */
     fun connect() {
-        if (mqttClient != null && !isConnected.get()) {
+        if (mqttClient != null && !mIsConnected.get()) {
             try {
-                mqttClient?.connect(connectOptions, null, object : IMqttActionListener {
+                mqttClient?.connect(mConnectOptions, null, object : IMqttActionListener {
                     override fun onSuccess(asyncActionToken: IMqttToken?) {
-                        isConnected.set(true)
+                        mIsConnected.set(true)
                         Log.d(TAG, "MQTT连接成功")
-                        callback?.onConnectionSuccess()
+                        mCallback?.onConnectionSuccess()
                     }
 
                     override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                        isConnected.set(false)
+                        mIsConnected.set(false)
                         Log.e(TAG, "MQTT连接失败: ${exception?.message}")
-                        callback?.onConnectionFailure(exception?.message)
+                        mCallback?.onConnectionFailure(exception?.message ?: "")
                     }
                 })
             } catch (e: MqttException) {
                 Log.e(TAG, "MQTT连接异常: ${e.message}")
-                callback?.onConnectionFailure(e.message)
+                mCallback?.onConnectionFailure(e.message ?: "")
             }
         }
     }
 
+    /**
+     * MQTT断开连接
+     */
     fun disconnect() {
-        if (mqttClient != null && isConnected.get()) {
+        if (mqttClient != null && mIsConnected.get()) {
             try {
                 mqttClient?.disconnect()
-                isConnected.set(false)
+                mIsConnected.set(false)
                 Log.d(TAG, "MQTT断开连接")
             } catch (e: MqttException) {
                 Log.e(TAG, "MQTT断开连接异常: ${e.message}")
@@ -105,8 +126,13 @@ class MQTTService : Service(), MqttCallback {
         }
     }
 
+    /**
+     * 订阅主题
+     *
+     * @param topic 主题名称
+     */
     fun subscribe(topic: String) {
-        if (mqttClient != null && isConnected.get()) {
+        if (mqttClient != null && mIsConnected.get()) {
             try {
                 mqttClient?.subscribe(topic, MQTTConfig.QOS_LEVEL)
                 Log.d(TAG, "订阅主题: $topic")
@@ -116,8 +142,13 @@ class MQTTService : Service(), MqttCallback {
         }
     }
 
+    /**
+     * 取消订阅主题
+     *
+     * @param topic 主题名称
+     */
     fun unsubscribe(topic: String) {
-        if (mqttClient != null && isConnected.get()) {
+        if (mqttClient != null && mIsConnected.get()) {
             try {
                 mqttClient?.unsubscribe(topic)
                 Log.d(TAG, "取消订阅主题: $topic")
@@ -127,8 +158,14 @@ class MQTTService : Service(), MqttCallback {
         }
     }
 
+    /**
+     * 发布消息
+     *
+     * @param topic   主题
+     * @param message 消息内容
+     */
     fun publish(topic: String, message: String) {
-        if (mqttClient != null && isConnected.get()) {
+        if (mqttClient != null && mIsConnected.get()) {
             try {
                 val mqttMessage = MqttMessage(message.toByteArray()).apply {
                     qos = MQTTConfig.QOS_LEVEL
@@ -141,40 +178,57 @@ class MQTTService : Service(), MqttCallback {
         }
     }
 
-    fun isConnected(): Boolean = isConnected.get()
+    /**
+     * MQTT是否已连接
+     *
+     * @return true: 已连接 false: 未连接
+     */
+    fun isConnected(): Boolean = mIsConnected.get()
 
-    fun setCallback(callback: MQTTCallback?) {
-        this.callback = callback
-    }
-
-    override fun connectionLost(cause: Throwable?) {
-        isConnected.set(false)
-        Log.e(TAG, "MQTT连接丢失: ${cause?.message}")
-        callback?.onConnectionFailure("连接丢失: ${cause?.message}")
-    }
-
-    override fun messageArrived(topic: String?, message: MqttMessage?) {
-        val payload = String(message?.payload ?: ByteArray(0))
-        Log.d(TAG, "收到消息 - 主题: $topic, 内容: $payload")
-        callback?.onMessageReceived(topic, payload)
-    }
-
-    override fun deliveryComplete(token: IMqttDeliveryToken?) {
-        try {
-            val topics = token?.topics
-            if (topics != null && topics.isNotEmpty()) {
-                val topic = topics[0]
-                Log.d(TAG, "消息投递完成 - 主题: $topic")
-                callback?.onMessageDelivered(topic)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "消息投递完成回调异常: ${e.message}")
-        }
+    /**
+     * 设置回调
+     *
+     * @param callback MQTTCallback
+     */
+    fun setCallback(callback: MQTTCallback) {
+        this.mCallback = callback
     }
 
     override fun onDestroy() {
         super.onDestroy()
         disconnect()
         mqttClient?.close()
+    }
+
+    /**
+     * 回调方法
+     */
+    interface MQTTCallback {
+        /**
+         * 连接成功
+         */
+        fun onConnectionSuccess()
+
+        /**
+         * 连接失败
+         *
+         * @param error 失败原因
+         */
+        fun onConnectionFailure(error: String)
+
+        /**
+         * 收到消息
+         *
+         * @param topic   主题
+         * @param message 消息内容
+         */
+        fun onMessageReceived(topic: String, message: String)
+
+        /**
+         * 消息投递完成
+         *
+         * @param topic 主题
+         */
+        fun onMessageDelivered(topic: String)
     }
 }

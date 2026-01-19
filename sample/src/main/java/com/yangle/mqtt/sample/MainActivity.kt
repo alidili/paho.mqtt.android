@@ -1,17 +1,15 @@
 package com.yangle.mqtt.sample
 
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.yangle.mqtt.sample.MQTTService.MQTTCallback
+import com.yangle.mqtt.sample.databinding.ActivityMainBinding
 import java.text.DateFormat
 import java.util.Date
 
@@ -21,36 +19,62 @@ import java.util.Date
  * Created by YangLe on 2026/1/9.
  * Website：http://www.yangle.tech
  */
-class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
+class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
     }
 
+    private lateinit var binding: ActivityMainBinding
     private var mqttService: MQTTService? = null
-    private var isBound = false
+    private var mServiceConnected = false
 
-    private lateinit var btnConnect: Button
-    private lateinit var btnDisconnect: Button
-    private lateinit var btnSubscribe: Button
-    private lateinit var btnUnsubscribe: Button
-    private lateinit var btnPublish: Button
-    private lateinit var tvStatus: TextView
-    private lateinit var tvLog: TextView
-    private lateinit var etTopic: EditText
-    private lateinit var etMessage: EditText
-
+    /**
+     * MQTT服务
+     */
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as MQTTService.LocalBinder
             mqttService = binder.getService()
-            mqttService?.setCallback(this@MainActivity)
-            isBound = true
+            mqttService?.setCallback(object : MQTTCallback {
+                override fun onConnectionSuccess() {
+                    appendLog("MQTT连接成功!")
+                    runOnUiThread {
+                        binding.tvStatus.text = "状态: 已连接"
+                        binding.btnConnect.isEnabled = false
+                        binding.btnDisconnect.isEnabled = true
+                        binding.btnSubscribe.isEnabled = true
+                        binding.btnUnsubscribe.isEnabled = true
+                        binding.btnPublish.isEnabled = true
+                    }
+                }
+
+                override fun onConnectionFailure(error: String) {
+                    appendLog("MQTT连接失败: $error")
+                    runOnUiThread {
+                        binding.tvStatus.text = "状态: 连接失败"
+                        binding.btnConnect.isEnabled = true
+                        binding.btnDisconnect.isEnabled = false
+                        binding.btnSubscribe.isEnabled = false
+                        binding.btnUnsubscribe.isEnabled = false
+                        binding.btnPublish.isEnabled = false
+                    }
+                }
+
+                override fun onMessageReceived(topic: String, message: String) {
+                    appendLog("收到消息 - 主题: $topic, 内容: $message")
+                }
+
+                override fun onMessageDelivered(topic: String) {
+                    appendLog("消息投递完成 - 主题: $topic")
+                }
+            })
+            mServiceConnected = true
             Log.d(TAG, "MQTT服务绑定成功")
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            isBound = false
+            mServiceConnected = false
             mqttService = null
             Log.d(TAG, "MQTT服务断开绑定")
         }
@@ -58,37 +82,25 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        initViews()
-        setupClickListeners()
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        init()
     }
 
-    private fun initViews() {
-        btnConnect = findViewById(R.id.btn_connect)
-        btnDisconnect = findViewById(R.id.btn_disconnect)
-        btnSubscribe = findViewById(R.id.btn_subscribe)
-        btnUnsubscribe = findViewById(R.id.btn_unsubscribe)
-        btnPublish = findViewById(R.id.btn_publish)
-
-        tvStatus = findViewById(R.id.tv_status)
-        tvLog = findViewById(R.id.tv_log)
-
-        etTopic = findViewById(R.id.et_topic)
-        etMessage = findViewById(R.id.et_message)
+    private fun init() {
+        binding.btnConnect.setOnClickListener { connectMQTT() }
+        binding.btnDisconnect.setOnClickListener { disconnectMQTT() }
+        binding.btnSubscribe.setOnClickListener { subscribeTopic() }
+        binding.btnUnsubscribe.setOnClickListener { unsubscribeTopic() }
+        binding.btnPublish.setOnClickListener { publishMessage() }
     }
 
-    private fun setupClickListeners() {
-        btnConnect.setOnClickListener { connectMQTT() }
-        btnDisconnect.setOnClickListener { disconnectMQTT() }
-        btnSubscribe.setOnClickListener { subscribeTopic() }
-        btnUnsubscribe.setOnClickListener { unsubscribeTopic() }
-        btnPublish.setOnClickListener { publishMessage() }
-    }
-
+    /**
+     * 连接MQTT
+     */
     private fun connectMQTT() {
-        if (isBound && mqttService != null) {
-            if (!mqttService!!.isConnected.get()) {
+        if (mServiceConnected && mqttService != null) {
+            if (!mqttService!!.isConnected()) {
                 appendLog("正在连接MQTT服务器...")
                 mqttService!!.connect()
             } else {
@@ -99,9 +111,12 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
         }
     }
 
+    /**
+     * 断开连接MQTT
+     */
     private fun disconnectMQTT() {
-        if (isBound && mqttService != null) {
-            if (mqttService!!.isConnected.get()) {
+        if (mServiceConnected && mqttService != null) {
+            if (mqttService!!.isConnected()) {
                 appendLog("正在断开MQTT连接...")
                 mqttService!!.disconnect()
             } else {
@@ -110,9 +125,12 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
         }
     }
 
+    /**
+     * 订阅主题
+     */
     private fun subscribeTopic() {
-        if (isBound && mqttService != null && mqttService!!.isConnected.get()) {
-            val topic = etTopic.text.toString().trim()
+        if (mServiceConnected && mqttService != null && mqttService!!.isConnected()) {
+            val topic = binding.etTopic.text.toString().trim()
             if (topic.isNotEmpty()) {
                 appendLog("订阅主题: $topic")
                 mqttService!!.subscribe(topic)
@@ -124,9 +142,12 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
         }
     }
 
+    /**
+     * 取消订阅主题
+     */
     private fun unsubscribeTopic() {
-        if (isBound && mqttService != null && mqttService!!.isConnected.get()) {
-            val topic = etTopic.text.toString().trim()
+        if (mServiceConnected && mqttService != null && mqttService!!.isConnected()) {
+            val topic = binding.etTopic.text.toString().trim()
             if (topic.isNotEmpty()) {
                 appendLog("取消订阅主题: $topic")
                 mqttService!!.unsubscribe(topic)
@@ -138,10 +159,13 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
         }
     }
 
+    /**
+     * 发布消息
+     */
     private fun publishMessage() {
-        if (isBound && mqttService != null && mqttService!!.isConnected.get()) {
-            val topic = etTopic.text.toString().trim()
-            val message = etMessage.text.toString().trim()
+        if (mServiceConnected && mqttService != null && mqttService!!.isConnected()) {
+            val topic = binding.etTopic.text.toString().trim()
+            val message = binding.etMessage.text.toString().trim()
 
             if (topic.isNotEmpty() && message.isNotEmpty()) {
                 appendLog("发布消息到主题 $topic: $message")
@@ -154,62 +178,29 @@ class MainActivity : AppCompatActivity(), MQTTService.MQTTCallback {
         }
     }
 
+    /**
+     * 显示日志
+     *
+     * @param message 日志内容
+     */
     private fun appendLog(message: String) {
         runOnUiThread {
             val timestamp = DateFormat.getTimeInstance().format(Date())
-            tvLog.append("[$timestamp] $message\n")
-        }
-    }
-
-    private fun updateStatus(status: String) {
-        runOnUiThread {
-            tvStatus.text = "状态: $status"
+            binding.tvLog.append("[$timestamp] $message\n")
         }
     }
 
     override fun onStart() {
         super.onStart()
         val intent = Intent(this, MQTTService::class.java)
-        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
     }
 
     override fun onStop() {
         super.onStop()
-        if (isBound) {
+        if (mServiceConnected) {
             unbindService(serviceConnection)
-            isBound = false
+            mServiceConnected = false
         }
-    }
-
-    override fun onConnectionSuccess() {
-        appendLog("MQTT连接成功!")
-        updateStatus("已连接")
-        runOnUiThread {
-            btnConnect.isEnabled = false
-            btnDisconnect.isEnabled = true
-            btnSubscribe.isEnabled = true
-            btnUnsubscribe.isEnabled = true
-            btnPublish.isEnabled = true
-        }
-    }
-
-    override fun onConnectionFailure(error: String?) {
-        appendLog("MQTT连接失败: $error")
-        updateStatus("连接失败")
-        runOnUiThread {
-            btnConnect.isEnabled = true
-            btnDisconnect.isEnabled = false
-            btnSubscribe.isEnabled = false
-            btnUnsubscribe.isEnabled = false
-            btnPublish.isEnabled = false
-        }
-    }
-
-    override fun onMessageReceived(topic: String?, message: String?) {
-        appendLog("收到消息 - 主题: $topic, 内容: $message")
-    }
-
-    override fun onMessageDelivered(topic: String?) {
-        appendLog("消息投递完成 - 主题: $topic")
     }
 }
