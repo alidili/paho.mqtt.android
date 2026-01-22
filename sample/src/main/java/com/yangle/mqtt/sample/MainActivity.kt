@@ -88,6 +88,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun init() {
+        // 绑定MQTT服务
+        val intent = Intent(this, MQTTService::class.java)
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+
         binding.btnConnect.setOnClickListener { connectMQTT() }
         binding.btnDisconnect.setOnClickListener { disconnectMQTT() }
         binding.btnSubscribe.setOnClickListener { subscribeTopic() }
@@ -190,14 +194,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        val intent = Intent(this, MQTTService::class.java)
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
-    }
-
-    override fun onStop() {
-        super.onStop()
+    override fun onDestroy() {
+        super.onDestroy()
         if (mServiceConnected) {
             unbindService(serviceConnection)
             mServiceConnected = false
